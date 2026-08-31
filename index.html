@@ -116,7 +116,7 @@
 
                 <div class="form-group checkbox-group">
                     <input type="checkbox" id="useMock" checked>
-                    <label for="useMock" style="margin-bottom: 0;">Use Simulation Mode (Safe for local file testing without network blocks)</label>
+                    <label for="useMock" style="margin-bottom: 0;">Use Simulation Mode (Safe for offline testing & demos)</label>
                 </div>
 
                 <button class="btn btn-accent" style="width: 100%;" onclick="testCloudConnection()">
@@ -328,7 +328,7 @@
             container.innerHTML = html;
         }
 
-        // Validate APIM Credentials
+        // Updated Solution 2 Error Diagnostics
         async function testCloudConnection() {
             const apiEmail = document.getElementById('apiEmail').value.trim();
             const subscriptionKey = document.getElementById('subscriptionKey').value.trim();
@@ -382,12 +382,23 @@
                 }
             } catch (err) {
                 connPill.className = "conn-status status-offline";
-                connText.innerText = "Network Blocked / CORS";
-                logResponse.innerText = JSON.stringify({ "error": err.message, "hint": "Browsers block direct requests from local HTML files (file://). Leave 'Simulation Mode' checked to test locally." }, null, 2);
+                connText.innerText = "Connection Failed";
+                
+                const currentOrigin = window.location.origin || window.location.protocol;
+                logResponse.innerText = JSON.stringify({ 
+                    "error": err.message, 
+                    "origin": currentOrigin,
+                    "possibleCauses": [
+                        `Azure APIM CORS policy is blocking requests from origin: '${currentOrigin}'`,
+                        "Invalid or missing Ocp-Apim-Subscription-Key header",
+                        "Network/firewall policy blocking direct requests to the Azure APIM domain"
+                    ],
+                    "recommendation": "Check 'Simulation Mode' in the top card for offline/demo presentations."
+                }, null, 2);
             }
         }
 
-        // Fetch All Registered Devices
+        // Fetch All Registered Devices with Solution 2 Diagnostic Catch
         async function fetchAllDevices() {
             const subscriptionKey = document.getElementById('subscriptionKey').value.trim();
             const useMock = document.getElementById('useMock').checked;
@@ -431,7 +442,16 @@
                     logResponse.innerText = JSON.stringify(data, null, 2);
                 }
             } catch (err) {
-                logResponse.innerText = JSON.stringify({ "error": err.message }, null, 2);
+                const currentOrigin = window.location.origin || window.location.protocol;
+                logResponse.innerText = JSON.stringify({ 
+                    "error": err.message, 
+                    "origin": currentOrigin,
+                    "possibleCauses": [
+                        `Azure APIM CORS policy is blocking requests from origin: '${currentOrigin}'`,
+                        "Invalid or missing Ocp-Apim-Subscription-Key header"
+                    ],
+                    "recommendation": "Check 'Simulation Mode' in the top card to display fleet inventory offline."
+                }, null, 2);
             }
         }
 
