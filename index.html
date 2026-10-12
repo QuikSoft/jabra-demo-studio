@@ -79,6 +79,22 @@
         details { background: #1e293b; color: #e2e8f0; border-radius: 6px; padding: 10px; font-size: 11px; margin-top: 14px; }
         summary { cursor: pointer; font-weight: 600; color: #94a3b8; outline: none; }
         pre { font-family: monospace; font-size: 11px; margin-top: 8px; overflow-x: auto; color: #38bdf8; max-height: 250px; }
+    
+        .layout-grid > div { min-width: 0; }
+        @media (min-width: 1025px) { .layout-grid { grid-template-columns: 1fr 1fr; } }
+        .table-scroll { overflow-x: auto; }
+        .device-table { min-width: 540px; }
+        .device-table td { overflow-wrap: anywhere; }
+        .logo-group, .logo-group > div { min-width: 0; }
+        .logo-badge { flex-shrink: 0; }
+        .device-table td:nth-child(2), .device-table td:nth-child(4) { white-space: nowrap; }
+        #logResponse { white-space: pre-wrap; overflow-wrap: anywhere; }
+        textarea { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-family: monospace; resize: vertical; }
+        input[type="checkbox"] { width: auto; }
+        .field-help, #operationStatus { font-size: 12px; line-height: 1.5; margin-top: 6px; color: var(--text-muted); }
+        .btn:disabled { opacity: .55; cursor: wait; }
+        [hidden] { display: none !important; }
+        @media (max-width: 600px) { body { padding: 10px; } header { padding: 16px; flex-wrap: wrap; gap: 12px; } .card { padding: 16px; } .btn-group { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -93,7 +109,7 @@
         </div>
         <div id="connectionPill" class="conn-status status-offline">
             <span class="status-pulse"></span>
-            <span id="connectionText">Disconnected</span>
+            <span id="connectionText" role="status">Disconnected</span>
         </div>
     </header>
 
@@ -110,8 +126,8 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="apiEmail">API User Email Address</label>
-                    <input type="email" id="apiEmail" placeholder="e.g. user@enterprise.com">
+                    <label for="apiEmail">Account label (optional; not used for authentication)</label>
+                    <input type="text" id="apiEmail" placeholder="Optional label for your own reference">
                 </div>
 
                 <div class="form-group">
@@ -124,7 +140,7 @@
                     <label for="useMock" style="margin-bottom: 0;">Use Simulation Mode (Enable for offline testing without network blocks)</label>
                 </div>
 
-                <button class="btn btn-accent" style="width: 100%;" onclick="testCloudConnection()">
+                <button class="btn btn-accent" style="width: 100%;" data-request-button onclick="testCloudConnection()">
                     🔑 Validate Gateway Connection
                 </button>
             </div>
@@ -147,6 +163,7 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="actionDropdown">Operation</label>
                     <select id="actionDropdown" onchange="onActionSelected()"></select>
                 </div>
                 <p id="actionDescription" style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px; font-style: italic;"></p>
@@ -157,10 +174,10 @@
                 </div>
 
                 <div class="btn-group" style="margin-bottom: 14px;">
-                    <button class="btn btn-primary" onclick="fetchAllDevices()">
+                    <button class="btn btn-primary" data-request-button onclick="fetchAllDevices()">
                         📱 Fetch All Registered Devices
                     </button>
-                    <button class="btn btn-primary" onclick="executeStudioAction()">
+                    <button class="btn btn-primary" data-request-button onclick="executeStudioAction()">
                         ▶ Execute Selected Operation
                     </button>
                 </div>
@@ -168,21 +185,20 @@
                 <div class="form-group" id="targetDeviceGroup">
                     <label for="deviceSelect">Target Device ID / Serial</label>
                     <select id="deviceSelect">
-                        <option value="6CFBED56D835">Jabra Perform 75 (SN: 6CFBED56D835)</option>
-                        <option value="6CFBED992110">Jabra Perform 45 (SN: 6CFBED992110)</option>
+                        <option value="">Fetch inventory to load targets</option>
                     </select>
                 </div>
 
                 <div class="form-group" id="targetFolderGroup" style="display: none;">
                     <label for="folderSelect">Target Folder</label>
                     <select id="folderSelect">
-                        <option value="folder-amsterdam-01">Amsterdam Logistics Hub (folder-amsterdam-01)</option>
-                        <option value="folder-rotterdam-02">Rotterdam Retail Branch (folder-rotterdam-02)</option>
-                        <option value="folder-global-root">Global Enterprise Root (folder-global-root)</option>
+                        <option value="">Fetch inventory to load folders</option>
                     </select>
                 </div>
 
                 <div id="dynamicFormFields"></div>
+                <p id="operationStatus" role="status" aria-live="polite">Ready.</p>
+                <button id="cancelRequest" class="btn" hidden onclick="cancelRequest()">Cancel request</button>
             </div>
         </div>
 
@@ -191,23 +207,24 @@
             <!-- Live Registered Fleet Table -->
             <div class="card">
                 <h2>Registered Device Inventory</h2>
-                <div id="deviceCountLabel" style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Click "Fetch All Registered Devices" to populate fleet data.</div>
+                <div id="deviceCountLabel" role="status" style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Click "Fetch All Registered Devices" to populate fleet data.</div>
 
-                <table class="device-table">
+                <div class="table-scroll"><table class="device-table">
                     <thead>
                         <tr>
                             <th>Device Name</th>
                             <th>Serial Number</th>
+                            <th>Folder</th>
                             <th>Status</th>
                             <th>Battery</th>
                         </tr>
                     </thead>
                     <tbody id="deviceTableBody">
                         <tr>
-                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 16px;">No devices loaded yet.</td>
+                            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 16px;">No devices loaded yet.</td>
                         </tr>
                     </tbody>
-                </table>
+                </table></div>
             </div>
 
             <!-- Developer Log Inspector -->
@@ -225,38 +242,39 @@
 
     <script>
         function getBaseUrl() {
-            return document.getElementById('gatewayUrl').value.trim().replace(/\/$/, '');
+            return document.getElementById('gatewayUrl').value.trim().replace(/\/+$/, '');
         }
 
         const apiOperations = {
             devices: [
+                { id: 'fetchTenantDevices', name: '📱 Fetch All Registered Devices (Tenant)', desc: 'Loads devices from every accessible folder and unassigned devices.', endpoint: 'GET /api/Folders/tree', type: 'none' },
                 { id: 'getDevice', name: '🔍 Get Device Info', desc: 'Gets detailed information about a single device.', endpoint: 'GET /api/Devices/{id}', type: 'device' },
                 { id: 'rebootDevice', name: '🔄 Reboot Device', desc: 'Sends an asynchronous remote reboot command.', endpoint: 'POST /api/DeviceCommand/{deviceId}/reboot', type: 'device' },
                 { id: 'forceSyncDevice', name: '⚡ Force Cloud Sync', desc: 'Triggers out-of-band sync immediately.', endpoint: 'POST /api/DeviceCommand/{deviceId}/force-sync', type: 'device' },
                 { id: 'unassignedDevices', name: '📦 List Unassigned Devices', desc: 'Lists devices not assigned to any folder.', endpoint: 'GET /api/Devices/unassigned', type: 'none' },
                 { id: 'deleteDevice', name: '🗑️ Delete / Deregister Device', desc: 'Requests removal of device from tenant.', endpoint: 'DELETE /api/Devices/{deviceId}', type: 'device' },
-                { id: 'filterFolderDevices', name: '📋 Filter Folder Devices', desc: 'Paged list of devices assigned to a folder.', endpoint: 'POST /api/folders/{folderId}/devices/filter', type: 'folder' },
+                { id: 'filterFolderDevices', name: '📋 Filter Folder Devices', desc: 'Paged list of devices assigned to a folder.', endpoint: 'POST /api/Folders/{folderId}/assigneddevices', type: 'folder' },
                 { id: 'updateDeviceSettings', name: '✏️ Update Device Settings', desc: 'Applies settings updates to specified device.', endpoint: 'PATCH /api/Devices/{deviceId}/settings', type: 'device' },
                 { id: 'getDeviceSettings', name: '⚙️ Get Current Settings', desc: 'Returns active device settings.', endpoint: 'GET /api/Devices/{deviceId}/settings', type: 'device' },
                 { id: 'getDeviceConfig', name: '📄 Get Effective Config', desc: 'Resolves configuration inherited from folder.', endpoint: 'GET /api/Devices/{deviceId}/configuration', type: 'device' }
             ],
             folders: [
-                { id: 'getFullTree', name: '🌳 Get Full Folder Tree', desc: 'Gets complete folder hierarchy for tenant.', endpoint: 'GET /api/folders/tree', type: 'none' },
-                { id: 'getFolderSubtree', name: '🌿 Get Folder Subtree', desc: 'Gets folder tree rooted at specified node.', endpoint: 'GET /api/folders/{folderId}/tree', type: 'folder' },
-                { id: 'createSubfolder', name: '➕ Create Sub-folder', desc: 'Creates a child folder under parent folder.', endpoint: 'POST /api/folders/{parentFolderId}/folders', type: 'folder' },
-                { id: 'renameFolder', name: '✏️ Rename Folder', desc: 'Renames the specified folder.', endpoint: 'PATCH /api/folders/{id}', type: 'folder' },
-                { id: 'deleteFolder', name: '🗑️ Delete Folder & Descendants', desc: 'Deletes specified folder and child nodes.', endpoint: 'DELETE /api/folders/{id}', type: 'folder' }
+                { id: 'getFullTree', name: '🌳 Get Full Folder Tree', desc: 'Gets complete folder hierarchy for tenant.', endpoint: 'GET /api/Folders/tree', type: 'none' },
+                { id: 'getFolderSubtree', name: '🌿 Get Folder Subtree', desc: 'Gets folder tree rooted at specified node.', endpoint: 'GET /api/Folders/{id}/tree', type: 'folder' },
+                { id: 'createSubfolder', name: '➕ Create Sub-folder', desc: 'Creates a child folder under parent folder.', endpoint: 'POST /api/Folders', type: 'folder' },
+                { id: 'renameFolder', name: '✏️ Rename Folder', desc: 'Renames the specified folder.', endpoint: 'PATCH /api/Folders/{id}', type: 'folder' },
+                { id: 'deleteFolder', name: '🗑️ Delete Folder & Descendants', desc: 'Deletes specified folder and child nodes.', endpoint: 'DELETE /api/Folders/{id}', type: 'folder' }
             ],
             configs: [
                 { id: 'createFolderConfig', name: '➕ Create Folder Config', desc: 'Creates configuration for folder.', endpoint: 'POST /api/folders/{folderId}/configurations', type: 'folder' },
                 { id: 'updateConfigMeta', name: '✏️ Update Config Meta', desc: 'Updates name and description of folder config.', endpoint: 'PATCH /api/folders/{folderId}/configurations', type: 'folder' },
-                { id: 'setProductConfigs', name: '⚙️ Set Product Configs', desc: 'Sets per-product configurations in folder config.', endpoint: 'PUT /api/folders/{folderId}/configurations/products', type: 'folder' },
-                { id: 'removeProductConfig', name: '➖ Remove Product Config', desc: 'Removes specific product configuration.', endpoint: 'DELETE /api/folders/{folderId}/configurations/products/{productName}', type: 'folder' },
+                { id: 'setProductConfigs', name: '⚙️ Set Product Configs', desc: 'Sets per-product configurations in folder config.', endpoint: 'PUT /api/folders/{folderId}/configurations/product-configurations', type: 'folder' },
+                { id: 'removeProductConfig', name: '➖ Remove Product Config', desc: 'Removes specific product configuration.', endpoint: 'DELETE /api/folders/{folderId}/configurations/product-configurations', type: 'folder' },
                 { id: 'deleteFolderConfig', name: '🗑️ Delete Folder Config', desc: 'Deletes direct config; reverts to parent inheritance.', endpoint: 'DELETE /api/folders/{folderId}/configurations', type: 'folder' },
                 { id: 'getFolderConfig', name: '📄 Get Folder Config', desc: 'Gets effective configuration of folder.', endpoint: 'GET /api/folders/{folderId}/configurations', type: 'folder' },
-                { id: 'getFolderPolicies', name: '🛡️ Get Folder Policies', desc: 'Gets policies for specified folder.', endpoint: 'GET /api/folders/{folderId}/policies', type: 'folder' },
-                { id: 'setFolderPolicies', name: '✍️ Set Folder Policies', desc: 'Sets policies for specified folder.', endpoint: 'PUT /api/folders/{folderId}/policies', type: 'folder' },
-                { id: 'getEnrichedBundleConfig', name: '🎁 Get Enriched Bundle Config', desc: 'Gets product bundle config enriched with capabilities.', endpoint: 'GET /api/folders/{folderId}/product-bundle-configuration', type: 'folder' }
+                { id: 'getFolderPolicies', name: '🛡️ Get Folder Policies', desc: 'Gets policies for specified folder.', endpoint: 'GET /api/Folders/{id}/policy', type: 'folder' },
+                { id: 'setFolderPolicies', name: '✍️ Set Folder Policies', desc: 'Sets policies for specified folder.', endpoint: 'POST /api/Folders/{id}/policy', type: 'folder' },
+                { id: 'getEnrichedBundleConfig', name: '🎁 Get Enriched Bundle Config', desc: 'Gets product bundle config enriched with capabilities.', endpoint: 'GET /api/folders/{folderId}/products/{productBundleName}/with-firmware-and-capabilities', type: 'folder' }
             ],
             security: [
                 { id: 'getEventConfig', name: '🔔 Get Event Thresholds', desc: 'Gets battery telemetry warning thresholds.', endpoint: 'GET /api/folders/{id}/eventconfiguration', type: 'folder' },
@@ -309,213 +327,488 @@
             renderCustomFields(selectedId);
         }
 
-        function renderCustomFields(actionId) {
-            const container = document.getElementById('dynamicFormFields');
-            let html = '';
+        const $ = id => document.getElementById(id);
+        let activeJob = null;
+        let validatedConnection = '';
+        const readOnlyPosts = new Set(['filterFolderDevices', 'filterUsers', 'filterApiUsers']);
 
-            if (actionId === 'createSubfolder' || actionId === 'renameFolder') {
-                html = `<div class="form-group"><label>Folder Name</label><input type="text" id="inputFolderName" value="Logistics Sub-Zone 1"></div>`;
-            } else if (actionId === 'createFolderConfig' || actionId === 'updateConfigMeta') {
-                html = `
-                    <div class="form-group"><label>Config Name</label><input type="text" id="inputCfgName" value="Warehouse Standard Profile"></div>
-                    <div class="form-group"><label>Description</label><input type="text" id="inputCfgDesc" value="Automated profile for shift headsets."></div>
-                `;
-            } else if (actionId === 'setEventConfig') {
-                html = `
-                    <div class="form-group"><label>Battery Warning Threshold (%)</label><input type="number" id="inputWarn" value="20"></div>
-                    <div class="form-group"><label>Battery Error Threshold (%)</label><input type="number" id="inputErr" value="10"></div>
-                `;
-            } else if (actionId === 'updateDeviceSettings') {
-                html = `
-                    <div class="form-group"><label>Microphone Volume Level</label><input type="number" id="inputVol" value="85"></div>
-                `;
-            }
-
-            container.innerHTML = html;
+        function connectionIdentity() {
+            return JSON.stringify([getBaseUrl(), $('subscriptionKey').value.trim(), $('useMock').checked]);
         }
-
-        // Validate Cloud Connection with Api-Version: 1 Header
-        async function testCloudConnection() {
-            const apiEmail = document.getElementById('apiEmail').value.trim();
-            const subscriptionKey = document.getElementById('subscriptionKey').value.trim();
-            const useMock = document.getElementById('useMock').checked;
-            const baseUrl = getBaseUrl();
-
-            const connPill = document.getElementById('connectionPill');
-            const connText = document.getElementById('connectionText');
-            const logEndpoint = document.getElementById('logEndpoint');
-            const logResponse = document.getElementById('logResponse');
-
-            logEndpoint.innerText = `GET ${baseUrl}/api/permissions/me\nHeaders -> \n  Ocp-Apim-Subscription-Key: ${subscriptionKey ? '••••••••' : 'Missing'}\n  Api-Version: 1`;
-
-            if (useMock) {
-                setTimeout(() => {
-                    connPill.className = "conn-status status-online";
-                    connText.innerText = apiEmail ? `Connected (${apiEmail})` : "Connected (Valid Key)";
-                    logResponse.innerText = JSON.stringify({
-                        "cloudConnection": "SUCCESS",
-                        "targetEndpoint": baseUrl,
-                        "apiVersion": "1",
-                        "authenticatedUser": apiEmail || "Key Authenticated User",
-                        "isGlobalAdmin": true,
-                        "permissions": ["Read", "Manage", "Execute"]
-                    }, null, 2);
-                }, 350);
-                return;
+        function setConnection(text, online = false) {
+            $('connectionText').innerText = text;
+            $('connectionPill').className = `conn-status ${online ? 'status-online' : 'status-offline'}`;
+        }
+        function setBusy(busy) {
+            document.querySelectorAll('[data-request-button]').forEach(button => { button.disabled = busy; });
+            $('cancelRequest').hidden = !busy;
+        }
+        function beginJob(message) {
+            if (activeJob) throw new Error('A request is already running. Wait or cancel it first.');
+            const job = { controller: new AbortController(), identity: connectionIdentity(), routes: [] };
+            activeJob = job;
+            setBusy(true);
+            $('operationStatus').innerText = message;
+            return job;
+        }
+        function checkJob(job) {
+            if (job !== activeJob || job.controller.signal.aborted || job.identity !== connectionIdentity()) {
+                throw new DOMException('Request cancelled or connection changed.', 'AbortError');
             }
-
-            if (!subscriptionKey) {
-                alert("Please enter your Ocp-Apim-Subscription-Key.");
-                return;
+        }
+        function finishJob(job) {
+            if (activeJob === job) { activeJob = null; setBusy(false); }
+        }
+        function cancelRequest() {
+            if (!activeJob) return;
+            activeJob.controller.abort();
+            activeJob = null;
+            setBusy(false);
+            validatedConnection = '';
+            setConnection('Request cancelled — validate again');
+            $('operationStatus').innerText = 'Cancelled locally. A write already sent may still finish on the server; check its state before retrying.';
+        }
+        function scrub(value) {
+            const key = $('subscriptionKey').value.trim();
+            const clean = item => {
+                if (typeof item === 'string') return key ? item.split(key).join('[REDACTED]') : item;
+                if (Array.isArray(item)) return item.map(clean);
+                if (item && typeof item === 'object') return Object.fromEntries(Object.entries(item).map(([name, data]) =>
+                    [name, /^(subscriptionKey|accessToken|password|authorization|clientSecret)$/i.test(name) ? '[REDACTED]' : clean(data)]));
+                return item;
+            };
+            return clean(value);
+        }
+        function showResult(value) { $('logResponse').innerText = JSON.stringify(scrub(value), null, 2); }
+        function showError(error, job) {
+            if (job && activeJob !== job) return;
+            $('operationStatus').innerText = error.message;
+            showResult({ status: 'Failed', error: error.message, httpStatus: error.httpStatus, response: error.payload });
+        }
+        async function apiRequest(path, { method = 'GET', body, job } = {}) {
+            checkJob(job);
+            const base = new URL(getBaseUrl());
+            if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) {
+                throw new Error('Use an HTTPS gateway base URL without credentials, query parameters or a fragment.');
             }
-
+            if (!path.startsWith('/api/') || /[{}]/.test(path)) throw new Error('Invalid or unresolved API route.');
+            const key = $('subscriptionKey').value.trim();
+            if (!key) throw new Error('Enter your subscription key.');
+            const controller = new AbortController();
+            const abort = () => controller.abort();
+            job.controller.signal.addEventListener('abort', abort, { once: true });
+            let timedOut = false;
+            const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 20000);
+            job.routes.push(`${method} ${getBaseUrl()}${path}`);
+            $('logEndpoint').innerText = job.routes.join('\n') + '\nHeaders: Api-Version: 1; Ocp-Apim-Subscription-Key: ••••••••';
+            if (body !== undefined) $('logEndpoint').innerText += '\nRequest body: ' + JSON.stringify(scrub(body));
             try {
-                const res = await fetch(`${baseUrl}/api/permissions/me`, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Ocp-Apim-Subscription-Key': subscriptionKey,
-                        'Api-Version': '1'
-                    }
+                const response = await fetch(getBaseUrl() + path, {
+                    method, signal: controller.signal, redirect: 'error',
+                    headers: { Accept: 'application/json', 'Api-Version': '1', 'Ocp-Apim-Subscription-Key': key,
+                        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+                    ...(body !== undefined ? { body: JSON.stringify(body) } : {})
                 });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    connPill.className = "conn-status status-online";
-                    connText.innerText = "Connected (v1 Validated)";
-                    logResponse.innerText = JSON.stringify(data, null, 2);
-                } else {
-                    connPill.className = "conn-status status-offline";
-                    connText.innerText = `Rejected (${res.status})`;
-                    logResponse.innerText = JSON.stringify({ "error": "Gateway Authorization Rejected", "statusCode": res.status }, null, 2);
+                const text = await response.text();
+                checkJob(job);
+                let data = null;
+                if (text.trim()) { try { data = JSON.parse(text); } catch { data = text; } }
+                if (!response.ok) {
+                    if ([401, 403].includes(response.status)) {
+                        validatedConnection = '';
+                        setConnection(`Access rejected (${response.status}) — validate again`);
+                    }
+                    const error = new Error(`HTTP ${response.status}: ${response.statusText || 'Request rejected'}`);
+                    error.httpStatus = response.status; error.payload = data; throw error;
                 }
-            } catch (err) {
-                connPill.className = "conn-status status-offline";
-                connText.innerText = "Connection Failed";
-                
-                const currentOrigin = window.location.origin || window.location.protocol;
-                logResponse.innerText = JSON.stringify({ 
-                    "error": err.message, 
-                    "targetEndpoint": baseUrl,
-                    "origin": currentOrigin,
-                    "headersSent": {
-                        "Ocp-Apim-Subscription-Key": subscriptionKey ? "Present" : "Missing",
-                        "Api-Version": "1"
-                    },
-                    "possibleCauses": [
-                        `Azure Front Door or APIM CORS policy is blocking requests from origin: '${currentOrigin}'`,
-                        "The 'Api-Version' or 'Ocp-Apim-Subscription-Key' headers are not listed in APIM's Access-Control-Allow-Headers",
-                        "Network/firewall policy blocking direct requests to the Front Door endpoint"
-                    ],
-                    "recommendation": "Check 'Simulation Mode' in the top card for offline/demo presentations."
-                }, null, 2);
+                return { status: response.status, data };
+            } catch (error) {
+                if (timedOut) {
+                    validatedConnection = '';
+                    setConnection('Request timed out — validate again');
+                    throw new Error('Request timed out after 20 seconds. A write may still complete; verify before retrying.');
+                }
+                if (error.name === 'TypeError') {
+                    validatedConnection = '';
+                    setConnection('Connection failed — validate again');
+                    throw new Error('Network request failed. Check the gateway URL, connectivity and CORS permissions for this page origin.');
+                }
+                throw error;
+            } finally {
+                clearTimeout(timeout);
+                job.controller.signal.removeEventListener('abort', abort);
             }
         }
+        async function testCloudConnection() {
+            if (activeJob) return;
+            let job;
+            try {
+                job = beginJob('Validating connection…');
+                validatedConnection = '';
+                setConnection('Validating…');
+                if ($('useMock').checked) {
+                    $('logEndpoint').innerText = 'SIMULATION — no API requests';
+                    setConnection('SIMULATION — offline demo');
+                    showResult({ status: 'SIMULATED', message: 'No credentials or permissions have been verified.' });
+                } else {
+                    const result = await apiRequest('/api/permissions/me', { job });
+                    if (!result.data || typeof result.data !== 'object' || typeof result.data.isGlobalAdmin !== 'boolean') {
+                        throw new Error('Gateway returned an unexpected permissions response. Connection is not validated.');
+                    }
+                    validatedConnection = job.identity;
+                    setConnection('Connected (API v1 validated)', true);
+                    showResult(result);
+                }
+                $('operationStatus').innerText = $('useMock').checked ? 'Simulation ready.' : 'Gateway connection validated.';
+            } catch (error) {
+                if (!job || activeJob === job) { setConnection('Connection not validated'); showError(error, job); }
+            } finally { if (job) finishJob(job); }
+        }
 
-        // Fetch All Registered Devices with Api-Version: 1 Header
+        function addField(id, title, { value = '', type = 'text', help = '', min, max } = {}) {
+            const group = document.createElement('div'); group.className = 'form-group';
+            const label = document.createElement('label'); label.htmlFor = id; label.textContent = title;
+            const input = document.createElement(type === 'json' ? 'textarea' : 'input');
+            input.id = id;
+            if (type !== 'json') input.type = type;
+            else { input.rows = 7; input.spellcheck = false; }
+            input.value = value;
+            if (min !== undefined) input.min = min;
+            if (max !== undefined) input.max = max;
+            group.append(label, input);
+            if (help) { const note = document.createElement('p'); note.className = 'field-help'; note.textContent = help; group.append(note); }
+            $('dynamicFormFields').append(group);
+        }
+        function renderCustomFields(actionId) {
+            $('dynamicFormFields').replaceChildren();
+            if (['createSubfolder', 'renameFolder'].includes(actionId)) addField('inputFolderName', 'Folder name');
+            if (['createFolderConfig', 'updateConfigMeta'].includes(actionId)) {
+                addField('inputCfgName', 'Configuration name'); addField('inputCfgDesc', 'Description');
+                if (actionId === 'updateConfigMeta') {
+                    const note = document.createElement('p'); note.className = 'field-help';
+                    note.textContent = 'Existing firmware-management options are read and preserved when updating metadata.';
+                    $('dynamicFormFields').append(note);
+                }
+            }
+            if (actionId === 'setEventConfig') {
+                addField('inputWarn', 'Battery warning threshold (%)', { type: 'number', value: '20', min: 0, max: 100 });
+                addField('inputErr', 'Battery error threshold (%)', { type: 'number', value: '10', min: 0, max: 100 });
+            }
+            if (actionId === 'removeProductConfig') addField('inputProductName', 'Product name');
+            if (actionId === 'getEnrichedBundleConfig') addField('inputBundleName', 'Product bundle name');
+            const jsonFields = {
+                updateDeviceSettings: ['Settings object (JSON)', '{}', 'Use settings supported by this device’s capabilities. Read current settings first and preserve fields you do not intend to change.'],
+                setProductConfigs: ['Product configurations (JSON array)', '[]', 'This replaces the entire set. Each object needs productName, productBundleName, autoUpdate and settings. Include every product you want to retain.'],
+                setFolderPolicies: ['Policy configuration (JSON)', '{}', 'Supply the complete desired policy, including unchanged values. Read the current policy before editing.'],
+                filterFolderDevices: ['Device filter (JSON)', '{}', 'An empty object lists all devices in this folder; all pages are retrieved.'],
+                filterUsers: ['User filter (JSON)', '{}', 'An empty object lists all visible users; all pages are retrieved.'],
+                filterApiUsers: ['API user filter (JSON)', '{}', 'An empty object lists all visible API users; all pages are retrieved.']
+            };
+            if (jsonFields[actionId]) {
+                const [title, value, help] = jsonFields[actionId];
+                addField('inputJson', title, { type: 'json', value, help });
+            }
+            if (['filterUsers', 'filterApiUsers'].includes(actionId)) addField('inputMembers', 'Members only', { type: 'checkbox' });
+        }
+        function requiredText(id, label, max = Infinity) {
+            const value = $(id).value.trim();
+            if (!value || value.length > max) throw new Error(`${label} must contain 1–${max === Infinity ? 'a valid number of' : max} characters.`);
+            return value;
+        }
+        function jsonInput(array = false, nonempty = false) {
+            let value;
+            try { value = JSON.parse($('inputJson').value); } catch { throw new Error('Enter valid JSON.'); }
+            if (!value || (array ? !Array.isArray(value) : typeof value !== 'object' || Array.isArray(value))) {
+                throw new Error(`Enter a JSON ${array ? 'array' : 'object'}.`);
+            }
+            if (nonempty && !Object.keys(value).length) throw new Error('Enter the intended settings; an empty update is not allowed.');
+            return value;
+        }
+        function buildOperationRequest(op) {
+            const deviceId = $('deviceSelect').value;
+            const folderId = $('folderSelect').value;
+            const target = op.type === 'device' ? deviceId : op.type === 'folder' ? folderId : '';
+            if (op.type !== 'none' && !target) throw new Error('Fetch inventory and select a valid target first.');
+            const [method, template] = op.endpoint.split(' ');
+            const params = { id: target, deviceId, folderId, parentFolderId: folderId };
+            if (template.includes('{productName}')) params.productName = requiredText('inputProductName', 'Product name');
+            if (template.includes('{productBundleName}')) params.productBundleName = requiredText('inputBundleName', 'Product bundle name');
+            const path = template.replace(/\{([^}]+)\}/g, (_, key) => {
+                if (!params[key]) throw new Error(`Missing route parameter: ${key}`);
+                return encodeURIComponent(params[key]);
+            });
+            let body;
+            switch (op.id) {
+                case 'createSubfolder': body = { name: requiredText('inputFolderName', 'Folder name'), parentId: folderId }; break;
+                case 'renameFolder': body = { newName: requiredText('inputFolderName', 'Folder name') }; break;
+                case 'createFolderConfig': body = { name: requiredText('inputCfgName', 'Configuration name', 60), description: $('inputCfgDesc').value.trim() }; break;
+                case 'updateConfigMeta': body = { name: requiredText('inputCfgName', 'Configuration name', 60), description: $('inputCfgDesc').value.trim() }; break;
+                case 'setEventConfig': {
+                    const warningLevel = Number($('inputWarn').value), errorLevel = Number($('inputErr').value);
+                    if (!$('inputWarn').value.trim() || !$('inputErr').value.trim() || !Number.isFinite(warningLevel) || !Number.isFinite(errorLevel) || errorLevel < 0 || warningLevel > 100 || warningLevel <= errorLevel) {
+                        throw new Error('Battery thresholds must be within 0–100%, with warning higher than error.');
+                    }
+                    body = { batteryTelemetry: { warningLevel, errorLevel } }; break;
+                }
+                case 'updateDeviceSettings': body = { settings: jsonInput(false, true) }; break;
+                case 'setProductConfigs': body = { productConfigurations: jsonInput(true, true) }; break;
+                case 'removeProductConfig': body = { productNames: [requiredText('inputProductName', 'Product name')] }; break;
+                case 'setFolderPolicies': body = { policyConfiguration: jsonInput(false, true) }; break;
+                case 'filterFolderDevices': case 'filterApiUsers': case 'filterUsers':
+                    body = { filter: jsonInput(), page: { size: 100 } };
+                    if (['filterUsers', 'filterApiUsers'].includes(op.id)) body.membersOnly = $('inputMembers').checked;
+                    break;
+            }
+            if (body?.description?.length > 200) throw new Error('Description must be 200 characters or fewer.');
+            if (op.id === 'setProductConfigs' && body.productConfigurations.some(item => !item || typeof item !== 'object' || Array.isArray(item) || typeof item.productName !== 'string' || !item.productName.trim() || item.productName.length > 60 || typeof item.productBundleName !== 'string' || !item.productBundleName.trim() || typeof item.autoUpdate !== 'boolean' || !item.settings || typeof item.settings !== 'object' || Array.isArray(item.settings))) {
+                throw new Error('Each product needs productName (1–60 characters), productBundleName, autoUpdate (boolean), and settings (object).');
+            }
+            return { method, path, body, target, mutation: method !== 'GET' && !readOnlyPosts.has(op.id) };
+        }
+        async function executeStudioAction() {
+            if (activeJob) return;
+            const op = apiOperations[currentCategory].find(item => item.id === $('actionDropdown').value);
+            if (op.id === 'fetchTenantDevices') return fetchAllDevices();
+            let job;
+            try {
+                const request = buildOperationRequest(op);
+                if (!$('useMock').checked && request.mutation && validatedConnection !== connectionIdentity()) {
+                    throw new Error('Validate this gateway connection before executing a live change.');
+                }
+                job = beginJob(`Running ${op.name}…`);
+                if ($('useMock').checked) {
+                    $('logEndpoint').innerText = `SIMULATION — ${request.method} ${request.path}`;
+                    showResult({ status: 'SIMULATED', operation: op.name, target: request.target, requestBody: request.body, message: 'No API request was sent and no device or tenant state changed.' });
+                    $('operationStatus').innerText = 'SIMULATED — no live changes.';
+                    return;
+                }
+                if (op.id === 'updateConfigMeta') {
+                    const current = (await apiRequest(request.path, { job })).data;
+                    if (!current || current.inheritedFromFolderId || typeof current.firmwareManagementEnabled !== 'boolean' || typeof current.alwaysUseLatestFirmware !== 'boolean') {
+                        throw new Error('Could not read a direct folder configuration with firmware settings to preserve.');
+                    }
+                    request.body.firmwareManagementEnabled = current.firmwareManagementEnabled;
+                    request.body.alwaysUseLatestFirmware = current.alwaysUseLatestFirmware;
+                }
+                if (request.mutation && !confirm(`Apply ${op.name} to ${request.target}?\n\n${request.method} ${getBaseUrl()}${request.path}\n${request.body ? JSON.stringify(request.body, null, 2) : ''}\n\n${op.id === 'setProductConfigs' ? 'This replaces the entire product-configuration set.\n' : ''}This changes the live tenant.${request.method === 'DELETE' ? ' Deletions may be irreversible.' : ''}`)) {
+                    $('operationStatus').innerText = 'Change cancelled before sending.';
+                    return;
+                }
+                let result;
+                if (readOnlyPosts.has(op.id)) {
+                    const items = [], tokens = new Set();
+                    let token;
+                    do {
+                        result = await apiRequest(request.path, { ...request, body: { ...request.body, page: { size: 100, ...(token ? { continuationToken: token } : {}) } }, job });
+                        items.push(...inventoryItems(result.data));
+                        token = result.data.continuationToken;
+                        if (token && tokens.has(token)) throw new Error('Repeated continuation token; result is incomplete.');
+                        if (token) tokens.add(token);
+                    } while (token);
+                    result = { ...result, data: { items, totalLoaded: items.length, continuationToken: null } };
+                } else result = await apiRequest(request.path, { ...request, job });
+                checkJob(job);
+                const asynchronous = ['rebootDevice', 'forceSyncDevice', 'deleteDevice'].includes(op.id) || result.status === 202;
+                showResult({ operation: op.name, outcome: asynchronous ? 'Accepted — completion not yet confirmed' : 'HTTP request succeeded', ...result });
+                $('operationStatus').innerText = `${asynchronous ? 'Accepted; verify completion by reading the target again.' : 'Request succeeded.'} HTTP ${result.status}`;
+                if (op.id === 'getFullTree') renderFolderOptions(flattenFolders(result.data));
+                if (request.mutation && ['deleteDevice', 'createSubfolder', 'renameFolder', 'deleteFolder'].includes(op.id)) {
+                    resetInventory();
+                    $('deviceCountLabel').innerText = 'Tenant changed. Fetch inventory again to refresh targets.';
+                }
+            } catch (error) { showError(error, job); }
+            finally { if (job) finishJob(job); }
+        }
+
+
+        let inventoryController;
+
+        function inventoryItems(data) {
+            if (Array.isArray(data)) return data;
+            if (data && Array.isArray(data.items)) return data.items;
+            if (data && Array.isArray(data.devices)) return data.devices;
+            throw new Error('Unexpected device list response; inventory may be incomplete.');
+        }
+
+        function flattenFolders(tree) {
+            const folders = new Map();
+            function visit(node, parent = '') {
+                if (!node || node.id == null) throw new Error('Unexpected folder tree response.');
+                const id = String(node.id);
+                if (folders.has(id)) return;
+                const path = parent ? `${parent} / ${node.name ?? id}` : (node.name ?? id);
+                folders.set(id, { id, path });
+                const children = node.childLocations ?? [];
+                if (!Array.isArray(children)) throw new Error('Unexpected child folder response.');
+                children.forEach(child => visit(child, path));
+            }
+            (Array.isArray(tree) ? tree : [tree]).forEach(node => visit(node));
+            return [...folders.values()];
+        }
+
+        function resetInventory() {
+            inventoryController?.abort();
+            inventoryController = null;
+            renderDeviceTable([]);
+            renderFolderOptions([]);
+            document.getElementById('deviceCountLabel').innerText = 'Fetch devices to load inventory for this connection.';
+        }
+
+        function renderFolderOptions(folders) {
+            const select = document.getElementById('folderSelect');
+            const previous = select.value;
+            select.replaceChildren();
+            for (const folder of folders) select.add(new Option(folder.path, folder.id));
+            if (!folders.length) select.add(new Option('No folders loaded', ''));
+            if (folders.some(folder => folder.id === previous)) select.value = previous;
+            select.disabled = !folders.length;
+        }
+
         async function fetchAllDevices() {
+            if (activeJob) return;
+            const job = beginJob('Loading tenant inventory…');
+            const previousDevice = $('deviceSelect').value;
+            const previousFolder = $('folderSelect').value;
+            inventoryController?.abort();
+            const controller = job.controller;
+            inventoryController = controller;
             const subscriptionKey = document.getElementById('subscriptionKey').value.trim();
             const useMock = document.getElementById('useMock').checked;
             const baseUrl = getBaseUrl();
-
             const logEndpoint = document.getElementById('logEndpoint');
             const logResponse = document.getElementById('logResponse');
             const countLabel = document.getElementById('deviceCountLabel');
-
-            logEndpoint.innerText = `GET ${baseUrl}/api/Devices/unassigned\nHeaders -> \n  Ocp-Apim-Subscription-Key: ${subscriptionKey ? '••••••••' : 'Missing'}\n  Api-Version: 1`;
-
-            if (useMock) {
-                setTimeout(() => {
-                    const mockDevices = [
-                        { deviceName: "Jabra Perform 75", serialNumber: "6CFBED56D835", status: "Online", batteryLevelPercentage: 85 },
-                        { deviceName: "Jabra Perform 45", serialNumber: "6CFBED992110", status: "Online", batteryLevelPercentage: 42 },
-                        { deviceName: "Jabra Perform 75", serialNumber: "6CFBED110488", status: "Offline", batteryLevelPercentage: 90 }
-                    ];
-
-                    renderDeviceTable(mockDevices);
-                    countLabel.innerText = `Total Registered Devices Found: ${mockDevices.length}`;
-                    logResponse.innerText = JSON.stringify({ "totalCount": mockDevices.length, "devices": mockDevices }, null, 2);
-                }, 350);
-                return;
+            const routes = [];
+            const failures = [];
+            const devices = new Map();
+            let folders = [];
+            let successfulSources = 0;
+            let globalAdmin = false;
+            renderDeviceTable([]);
+            renderFolderOptions([]);
+            countLabel.innerText = 'Loading devices from every accessible folder and unassigned devices…';
+            logResponse.innerText = 'Loading…';
+            const checkCurrent = () => {
+                if (controller.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
+            };
+            async function request(path, body) {
+                checkCurrent();
+                return (await apiRequest(path, { method: body === undefined ? 'GET' : 'POST', body, job })).data;
             }
-
-            try {
-                const res = await fetch(`${baseUrl}/api/Devices/unassigned`, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Ocp-Apim-Subscription-Key': subscriptionKey,
-                        'Api-Version': '1'
-                    }
-                });
-
-                const data = await res.json();
-                if (res.ok) {
-                    const devicesList = Array.isArray(data) ? data : [data];
-                    renderDeviceTable(devicesList);
-                    countLabel.innerText = `Total Registered Devices Found: ${devicesList.length}`;
-                    logResponse.innerText = JSON.stringify(data, null, 2);
-                } else {
-                    logResponse.innerText = JSON.stringify(data, null, 2);
+            function addDevices(items, folder) {
+                for (const item of items) {
+                    if (!item || item.id == null || item.id === '') throw new Error('Device record has no API ID.');
+                    const id = String(item.id);
+                    if (!devices.has(id)) devices.set(id, { ...item, id,
+                        inventoryFolder: folder?.path ?? item.folderName ?? 'Unassigned' });
                 }
-            } catch (err) {
-                const currentOrigin = window.location.origin || window.location.protocol;
-                logResponse.innerText = JSON.stringify({ 
-                    "error": err.message, 
-                    "origin": currentOrigin,
-                    "possibleCauses": [
-                        `Azure Front Door / APIM CORS policy is blocking requests from origin: '${currentOrigin}'`,
-                        "Ensure 'Api-Version' and 'Ocp-Apim-Subscription-Key' are permitted under Access-Control-Allow-Headers in APIM policies"
-                    ],
-                    "recommendation": "Check 'Simulation Mode' in the top card to display fleet inventory offline."
-                }, null, 2);
             }
+            try {
+                if (useMock) {
+                    folders = [{ id: 'demo-root', path: 'Demo tenant' }, { id: 'demo-child', path: 'Demo tenant / Warehouse' }];
+                    addDevices([{ id: 'demo-1', deviceName: 'Jabra Perform 75', serialNumber: '6CFBED56D835', deviceConnectionStatus: 'Online', batteryLevelPercentage: 85 }], folders[0]);
+                    addDevices([{ id: 'demo-2', deviceName: 'Jabra Perform 45', serialNumber: '6CFBED992110', deviceConnectionStatus: 'Online', batteryLevelPercentage: 0 }], folders[1]);
+                    addDevices([{ id: 'demo-3', deviceName: 'Jabra Perform 75', serialNumber: '6CFBED110488', deviceConnectionStatus: 'Offline' }]);
+                    logEndpoint.innerText = 'SIMULATION — no API requests';
+                    successfulSources = 3;
+                } else {
+                    if (!subscriptionKey) throw new Error('Enter your subscription key before fetching devices.');
+                    try { globalAdmin = (await request('/api/permissions/me')).isGlobalAdmin === true; }
+                    catch (error) { checkCurrent(); failures.push({ source: 'Permission scope', error: error.message }); }
+                    try { folders = flattenFolders(await request('/api/Folders/tree')); }
+                    catch (error) { checkCurrent(); failures.push({ source: 'Folder tree', error: error.message }); }
+                    for (const folder of folders) {
+                        countLabel.innerText = `Loading ${folder.path} — ${devices.size} unique devices found…`;
+                        try {
+                            let token;
+                            const seenTokens = new Set();
+                            do {
+                                const data = await request(`/api/Folders/${encodeURIComponent(folder.id)}/assigneddevices`, {
+                                    filter: {}, page: { size: 100, ...(token ? { continuationToken: token } : {}) }
+                                });
+                                addDevices(inventoryItems(data), folder);
+                                token = data.continuationToken;
+                                if (token) {
+                                    if (seenTokens.has(token)) throw new Error('Repeated continuation token; paging stopped.');
+                                    seenTokens.add(token);
+                                }
+                            } while (token);
+                            successfulSources++;
+                        } catch (error) { checkCurrent(); failures.push({ source: folder.path, error: error.message }); }
+                    }
+                    try {
+                        const data = await request('/api/Devices/unassigned');
+                        addDevices(inventoryItems(data));
+                        if (data.continuationToken) throw new Error('Unassigned response has additional pages; paging contract unavailable.');
+                        successfulSources++;
+                    } catch (error) { checkCurrent(); failures.push({ source: 'Unassigned devices', error: error.message }); }
+                }
+                checkCurrent();
+                const inventory = [...devices.values()];
+                renderDeviceTable(inventory);
+                renderFolderOptions(folders);
+                if (inventory.some(device => device.id === previousDevice)) $('deviceSelect').value = previousDevice;
+                if (folders.some(folder => folder.id === previousFolder)) $('folderSelect').value = previousFolder;
+                const scope = useMock ? 'SIMULATION' : (globalAdmin ? 'Tenant inventory' : 'Accessible inventory — tenant-wide visibility not confirmed');
+                countLabel.innerText = `${scope}: ${inventory.length} unique devices; ${folders.length} folders plus unassigned. ${failures.length ? 'INCOMPLETE — see failed sources in the log.' : 'All returned sources loaded.'}`;
+                showResult({ scope, complete: !failures.length && (globalAdmin || useMock),
+                    totalCount: inventory.length, folders: folders.length, successfulSources, failures, devices: inventory });
+                $('operationStatus').innerText = failures.length ? 'Inventory is incomplete; see failed sources.' : 'Inventory loaded.';
+            } catch (error) {
+                if (controller.signal.aborted) return;
+                countLabel.innerText = 'Inventory could not be loaded.';
+                showError(error, job);
+            } finally { finishJob(job); }
         }
 
         function renderDeviceTable(devices) {
             const tableBody = document.getElementById('deviceTableBody');
-            tableBody.innerHTML = '';
-            
-            devices.forEach(d => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="font-weight:600;">${d.deviceName || 'Jabra Perform'}</td>
-                    <td><code>${d.serialNumber || d.id || 'N/A'}</code></td>
-                    <td><span style="color: ${d.status === 'Online' ? 'var(--success-green)' : 'var(--text-muted)'}; font-weight:bold;">${d.status || 'Active'}</span></td>
-                    <td>${d.batteryLevelPercentage !== undefined ? d.batteryLevelPercentage + '%' : '100%'}</td>
-                `;
-                tableBody.appendChild(tr);
-            });
+            const select = document.getElementById('deviceSelect');
+            tableBody.replaceChildren();
+            select.replaceChildren();
+            for (const device of devices) {
+                const name = device.deviceName ?? device.productName ?? device.variantName ?? 'Not reported';
+                const serial = device.serialNumber ?? device.electronicSerialNumber ?? 'Not reported';
+                const status = device.deviceConnectionStatus ?? device.status ?? 'Not reported';
+                const folder = device.inventoryFolder ?? 'Not reported';
+                const battery = device.batteryLevelPercentage == null ? 'Not reported' : `${device.batteryLevelPercentage}%`;
+                const row = document.createElement('tr');
+                for (const value of [name, serial, folder, status, battery]) {
+                    const cell = document.createElement('td');
+                    cell.textContent = String(value);
+                    row.appendChild(cell);
+                }
+                tableBody.appendChild(row);
+                select.add(new Option(`${name} — ${serial} — ${folder}`, device.id));
+            }
+            if (!devices.length) {
+                select.add(new Option('No devices loaded — fetch tenant inventory', ''));
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.textContent = 'No devices loaded.';
+                row.appendChild(cell);
+                tableBody.appendChild(row);
+            }
+            select.disabled = !devices.length;
         }
 
-        function executeStudioAction() {
-            const dropdown = document.getElementById('actionDropdown');
-            const selectedId = dropdown.value;
-            const op = apiOperations[currentCategory].find(o => o.id === selectedId);
-
-            const devId = document.getElementById('deviceSelect').value;
-            const folderId = document.getElementById('folderSelect').value;
-            const baseUrl = getBaseUrl();
-
-            const logEndpoint = document.getElementById('logEndpoint');
-            const logResponse = document.getElementById('logResponse');
-
-            let endpointUrl = `${baseUrl}${op.endpoint.replace('GET ', '').replace('POST ', '').replace('PATCH ', '').replace('PUT ', '').replace('DELETE ', '').replace('{id}', devId).replace('{deviceId}', devId).replace('{folderId}', folderId).replace('{parentFolderId}', folderId)}`;
-            logEndpoint.innerText = `${op.endpoint.split(' ')[0]} ${endpointUrl}\nHeaders -> Api-Version: 1`;
-
-            let mockResult = {
-                "operation": op.name,
-                "status": "Success",
-                "timestamp": new Date().toISOString(),
-                "executedTarget": op.type === 'device' ? devId : (op.type === 'folder' ? folderId : 'System Global')
-            };
-
-            logResponse.innerText = JSON.stringify(mockResult, null, 2);
-        }
 
         // Initialize view
         switchCategory('devices', document.querySelector('.cat-btn'));
-        testCloudConnection();
+        resetInventory();
+        for (const id of ['gatewayUrl', 'subscriptionKey', 'useMock']) {
+            document.getElementById(id).addEventListener('input', () => {
+                const hadPendingRequest = Boolean(activeJob);
+                if (activeJob) cancelRequest();
+                validatedConnection = '';
+                resetInventory();
+                setConnection($('useMock').checked ? 'SIMULATION — offline demo' : 'Connection changed — validate again');
+                $('operationStatus').innerText = hadPendingRequest ? 'Connection changed. An already-sent write may still complete; verify before retrying.' : 'Connection changed. Fetch inventory again.';
+                $('logEndpoint').innerText = 'IDLE';
+                showResult({ status: 'Connection changed' });
+            });
+        }
     </script>
 </body>
 </html>
