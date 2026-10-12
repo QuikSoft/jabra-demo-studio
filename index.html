@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="application-version" content="1.1.0">
+    <meta name="application-version" content="1.2.0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jabra Frontline Demo Studio — v1.1.0</title>
+    <title>Jabra Frontline Demo Studio — v1.2.0</title>
     <style>
         :root {
             --jabra-yellow: #ffc20e;
@@ -83,7 +83,22 @@
     
         .layout-grid > div { min-width: 0; }
         @media (min-width: 1025px) { .layout-grid { grid-template-columns: 1fr 1fr; } }
-        .table-scroll { overflow-x: auto; }
+        .table-scroll { overflow: auto; max-height: 420px; overscroll-behavior: contain; scrollbar-gutter: stable; }
+        .device-table th { position: sticky; top: 0; z-index: 1; }
+        .operation-result { margin-top: 22px; border-top: 1px solid var(--border-color); padding-top: 18px; }
+        .result-empty { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+        .result-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .result-heading h3 { font-size: 17px; overflow-wrap: anywhere; }
+        .result-badge { font-size: 10px; font-weight: 700; background: #e6f4f5; color: var(--accent-teal); padding: 4px 8px; border-radius: 12px; }
+        .result-group { margin-top: 16px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+        .result-group h4 { padding: 10px 12px; background: #f4f6f8; font-size: 12px; }
+        .result-field { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 12px; padding: 9px 12px; border-bottom: 1px solid #edf1f5; font-size: 12px; line-height: 1.5; }
+        .result-field:last-child { border-bottom: 0; }
+        .result-field dt { color: var(--text-muted); }
+        .result-field dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+        .result-details { margin: 0; padding: 0; background: transparent; color: var(--text-dark); }
+        .result-details summary { color: var(--accent-teal); }
+        .result-details .result-field { grid-template-columns: 1fr; gap: 2px; padding: 6px 0; }
         .device-table { min-width: 540px; }
         .device-table td { overflow-wrap: anywhere; }
         .logo-group, .logo-group > div { min-width: 0; }
@@ -104,8 +119,8 @@
         <div class="logo-group">
             <span class="logo-badge">Jabra</span>
             <div>
-                <h1>Jabra Frontline Demo Studio <span style="display:inline-block; background:#ffc20e; color:#111; padding:3px 8px; border-radius:4px; font-size:13px; white-space:nowrap;">v1.1.0</span></h1>
-                <p>Updated 2026-10-12 · Application v1.1.0 · API v1</p>
+                <h1>Jabra Frontline Demo Studio <span style="display:inline-block; background:#ffc20e; color:#111; padding:3px 8px; border-radius:4px; font-size:13px; white-space:nowrap;">v1.2.0</span></h1>
+                <p>Updated 2026-10-12 · Application v1.2.0 · API v1</p>
             </div>
         </div>
         <div id="connectionPill" class="conn-status status-offline">
@@ -200,6 +215,10 @@
                 <div id="dynamicFormFields"></div>
                 <p id="operationStatus" role="status" aria-live="polite">Ready.</p>
                 <button id="cancelRequest" class="btn" hidden onclick="cancelRequest()">Cancel request</button>
+                <section class="operation-result" aria-labelledby="resultTitle">
+                    <h2 id="resultTitle">Result</h2>
+                    <div id="readableResult" aria-live="polite"><p class="result-empty">Execute an operation to see its result here.</p></div>
+                </section>
             </div>
         </div>
 
@@ -210,7 +229,7 @@
                 <h2>Registered Device Inventory</h2>
                 <div id="deviceCountLabel" role="status" style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Click "Fetch All Registered Devices" to populate fleet data.</div>
 
-                <div class="table-scroll"><table class="device-table">
+                <div class="table-scroll" tabindex="0" role="region" aria-label="Registered device inventory — scroll to see all devices"><table class="device-table">
                     <thead>
                         <tr>
                             <th>Device Name</th>
@@ -313,6 +332,7 @@
         }
 
         function onActionSelected() {
+            clearReadableResult();
             const dropdown = document.getElementById('actionDropdown');
             const selectedId = dropdown.value;
             const op = apiOperations[currentCategory].find(o => o.id === selectedId);
@@ -326,6 +346,87 @@
             folderGroup.style.display = (op.type === 'folder') ? 'block' : 'none';
 
             renderCustomFields(selectedId);
+        }
+
+        let readableResultRevision = 0;
+        function resultNode(tag, text, className) {
+            const node = document.createElement(tag);
+            if (text !== undefined) node.textContent = String(text);
+            if (className) node.className = className;
+            return node;
+        }
+        function resultLabel(key) {
+            const labels = { id: 'Device ID', electronicSerialNumber: 'Serial number', deviceConnectionStatus: 'Connection status',
+                batteryLevelPercentage: 'Battery charge', computerIPAddress: 'IP address', computerWifiSsid: 'Wi-Fi network',
+                computerMacAddress: 'MAC address', jabraClientAutoUpdate: 'Client automatic updates', operatingSystem: 'Host operating system' };
+            return labels[key] ?? key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, value => value.toUpperCase());
+        }
+        function resultValue(value, key = '') {
+            if (value == null || value === '') return 'Not reported';
+            if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+            if (key === 'batteryLevelPercentage') return `${value}%`;
+            if (['lastSeenOnline', 'dateAdded'].includes(key) && typeof value === 'string') {
+                if (key === 'lastSeenOnline' && value.startsWith('9999-')) return 'Currently online';
+                const date = new Date(value);
+                if (!Number.isNaN(date.getTime())) return date.toLocaleString();
+            }
+            return String(value);
+        }
+        function resultFields(data) {
+            const list = resultNode('dl', undefined, 'result-fields');
+            for (const [key, value] of Object.entries(data)) {
+                const row = resultNode('div', undefined, 'result-field');
+                row.append(resultNode('dt', resultLabel(key)));
+                const content = resultNode('dd');
+                if (value && typeof value === 'object') {
+                    const disclosure = resultNode('details', undefined, 'result-details');
+                    disclosure.append(resultNode('summary', Array.isArray(value) ? `${value.length} items` : 'View details'));
+                    if (Object.keys(value).length) disclosure.append(resultFields(value));
+                    else disclosure.append(resultNode('p', Array.isArray(value) ? 'No items.' : 'No details reported.'));
+                    content.append(disclosure);
+                } else content.textContent = resultValue(value, key);
+                row.append(content); list.append(row);
+            }
+            return list;
+        }
+        function clearReadableResult(message = 'Execute an operation to see its result here.') {
+            readableResultRevision++;
+            const content = document.getElementById('readableResult');
+            content.replaceChildren(resultNode('p', message, 'result-empty'));
+        }
+        function renderReadableResult(op, data, target, simulated = false) {
+            const content = $('readableResult');
+            content.replaceChildren();
+            const banner = resultNode('div', undefined, 'result-heading');
+            banner.append(resultNode('h3', op.id === 'getDevice' ? (data?.deviceName ?? data?.productName ?? 'Device information') : op.name));
+            banner.append(resultNode('span', simulated ? 'SIMULATION' : 'API response', 'result-badge'));
+            content.append(banner);
+            content.append(resultNode('p', `${target ? `Target: ${target} · ` : ''}Retrieved ${new Date().toLocaleTimeString()}`, 'field-help'));
+            if (op.id !== 'getDevice' || !data || typeof data !== 'object' || Array.isArray(data)) {
+                content.append(data && typeof data === 'object' ? resultFields(scrub(data)) : resultNode('p', data == null ? 'Request succeeded. The API returned no content.' : data));
+                return;
+            }
+            const safeData = scrub(data);
+            const groups = [
+                ['Device & connection', ['id','deviceName','productName','variantName','electronicSerialNumber','serialNumber','deviceConnectionStatus','status','folderId','folderName','dateAdded','lastSeenOnline']],
+                ['Battery & firmware', ['batteryLevelPercentage','batteryLevel','firmwareVersion','firmware','firmwareUpdateStatus','firmwareManagementSupported','latestFirmwareVersion','firmwareStage','isFirmwareRevoked']],
+                ['Connected computer & network', ['operatingSystem','computerName','computerUserName','computerIPAddress','computerWifiSsid','computerMacAddress']],
+                ['Jabra client', ['jabraClientType','jabraClientVersion','jabraClientName','jabraClientAutoUpdate','jabraClient']],
+                ['Settings & compliance', ['settings','policyCompliance']]
+            ];
+            const consumed = new Set();
+            for (const [title, keys] of groups) {
+                const entries = keys.filter(key => Object.hasOwn(safeData, key)).map(key => { consumed.add(key); return [key, safeData[key]]; });
+                if (!entries.length) continue;
+                const section = resultNode('section', undefined, 'result-group');
+                section.append(resultNode('h4', title), resultFields(Object.fromEntries(entries)));
+                content.append(section);
+            }
+            const remaining = Object.fromEntries(Object.entries(safeData).filter(([key]) => !consumed.has(key)));
+            if (Object.keys(remaining).length) {
+                const section = resultNode('section', undefined, 'result-group');
+                section.append(resultNode('h4', 'Additional information'), resultFields(remaining)); content.append(section);
+            }
         }
 
         const $ = id => document.getElementById(id);
@@ -348,6 +449,8 @@
             if (activeJob) throw new Error('A request is already running. Wait or cancel it first.');
             const job = { controller: new AbortController(), identity: connectionIdentity(), routes: [] };
             activeJob = job;
+            clearReadableResult(message);
+            job.resultRevision = readableResultRevision;
             setBusy(true);
             $('operationStatus').innerText = message;
             return job;
@@ -368,6 +471,7 @@
             validatedConnection = '';
             setConnection('Request cancelled — validate again');
             $('operationStatus').innerText = 'Cancelled locally. A write already sent may still finish on the server; check its state before retrying.';
+            clearReadableResult('Request cancelled. No new result is available.');
         }
         function scrub(value) {
             const key = $('subscriptionKey').value.trim();
@@ -384,6 +488,7 @@
         function showError(error, job) {
             if (job && activeJob !== job) return;
             $('operationStatus').innerText = error.message;
+            if (!job || job.resultRevision === readableResultRevision) clearReadableResult(error.message);
             showResult({ status: 'Failed', error: error.message, httpStatus: error.httpStatus, response: error.payload });
         }
         async function apiRequest(path, { method = 'GET', body, job } = {}) {
@@ -580,6 +685,9 @@
                 if ($('useMock').checked) {
                     $('logEndpoint').innerText = `SIMULATION — ${request.method} ${request.path}`;
                     showResult({ status: 'SIMULATED', operation: op.name, target: request.target, requestBody: request.body, message: 'No API request was sent and no device or tenant state changed.' });
+                    const demoInfo = { id: request.target, deviceName: $('deviceSelect').selectedOptions?.[0]?.text.split(' — ')[0] ?? 'Demo device', productName: 'Demo device', electronicSerialNumber: $('deviceSelect').selectedOptions?.[0]?.text.split(' — ')[1] ?? 'DEMO-SERIAL', deviceConnectionStatus: 'Online', batteryLevelPercentage: 85, firmwareVersion: 'Demo firmware', operatingSystem: 'Demo host OS', computerName: 'Demo handheld', computerWifiSsid: 'Demo Wi-Fi', jabraClientName: 'Demo client', jabraClientAutoUpdate: false, settings: { microphoneVolume: { value: 85, isLocked: false } }, policyCompliance: null };
+                    if (op.id === 'getDevice') showResult({ status: 'SIMULATED', operation: op.name, data: demoInfo });
+                    renderReadableResult(op, op.id === 'getDevice' ? demoInfo : { status: 'SIMULATED', message: 'No API request was sent and no live state changed.', request: request.body ?? null }, request.target, true);
                     $('operationStatus').innerText = 'SIMULATED — no live changes.';
                     return;
                 }
@@ -593,6 +701,7 @@
                 }
                 if (request.mutation && !confirm(`Apply ${op.name} to ${request.target}?\n\n${request.method} ${getBaseUrl()}${request.path}\n${request.body ? JSON.stringify(request.body, null, 2) : ''}\n\n${op.id === 'setProductConfigs' ? 'This replaces the entire product-configuration set.\n' : ''}This changes the live tenant.${request.method === 'DELETE' ? ' Deletions may be irreversible.' : ''}`)) {
                     $('operationStatus').innerText = 'Change cancelled before sending.';
+                    clearReadableResult('Change cancelled before sending.');
                     return;
                 }
                 let result;
@@ -611,6 +720,7 @@
                 checkJob(job);
                 const asynchronous = ['rebootDevice', 'forceSyncDevice', 'deleteDevice'].includes(op.id) || result.status === 202;
                 showResult({ operation: op.name, outcome: asynchronous ? 'Accepted — completion not yet confirmed' : 'HTTP request succeeded', ...result });
+                if (job.resultRevision === readableResultRevision) renderReadableResult(op, asynchronous ? { outcome: 'Accepted — completion not yet confirmed', response: result.data } : result.data, request.target);
                 $('operationStatus').innerText = `${asynchronous ? 'Accepted; verify completion by reading the target again.' : 'Request succeeded.'} HTTP ${result.status}`;
                 if (op.id === 'getFullTree') renderFolderOptions(flattenFolders(result.data));
                 if (request.mutation && ['deleteDevice', 'createSubfolder', 'renameFolder', 'deleteFolder'].includes(op.id)) {
@@ -795,6 +905,9 @@
         }
 
 
+        for (const id of ['deviceSelect', 'folderSelect']) {
+            document.getElementById(id).addEventListener('change', () => clearReadableResult('Target changed. Execute an operation to retrieve its information.'));
+        }
         // Initialize view
         switchCategory('devices', document.querySelector('.cat-btn'));
         resetInventory();
@@ -805,6 +918,7 @@
                 validatedConnection = '';
                 resetInventory();
                 setConnection($('useMock').checked ? 'SIMULATION — offline demo' : 'Connection changed — validate again');
+                clearReadableResult('Connection changed. Fetch inventory and select a target.');
                 $('operationStatus').innerText = hadPendingRequest ? 'Connection changed. An already-sent write may still complete; verify before retrying.' : 'Connection changed. Fetch inventory again.';
                 $('logEndpoint').innerText = 'IDLE';
                 showResult({ status: 'Connection changed' });
